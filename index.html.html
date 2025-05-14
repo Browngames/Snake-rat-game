@@ -1,0 +1,228 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Snake vs Rat Game</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: sans-serif;
+      background: #111;
+      color: white;
+    }
+    canvas {
+      display: block;
+      background: #222;
+    }
+    #overlay {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      font-size: 18px;
+    }
+    #gameOver {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 32px;
+      color: red;
+      display: none;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div id="overlay">
+    Score: <span id="score">0</span><br />
+    High Score: <span id="highScore">0</span>
+  </div>
+  <div id="gameOver">Game Over! Press any key to restart</div>
+  <canvas id="gameCanvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    let score = 0;
+    let highScore = localStorage.getItem("highScore") || 0;
+    let gameOver = false;
+
+    const snake = [{ x: 100, y: 100 }];
+    const snakeSpeed = 2; // Constant speed
+    let snakeLength = 10;
+    let direction = { x: 1, y: 0 };
+    let snakeFace = "snake";
+    let snakeFaces = ["snake", "lion", "cat", "eagle"];
+    let faceIndex = 0;
+
+    const walls = [];
+    for (let i = 0; i < 15; i++) {
+      walls.push({ x: Math.random() * (canvas.width - 60), y: Math.random() * (canvas.height - 30), w: 50, h: 20 });
+    }
+
+    let rat = {
+      x: canvas.width / 2,
+      y: canvas.height / 2,
+      size: 20,
+      dx: 0,
+      dy: 0,
+      speed: 3.5
+    };
+
+    function drawRat() {
+      ctx.fillStyle = "pink";
+      ctx.beginPath();
+      ctx.arc(rat.x, rat.y, rat.size / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "black";
+      const blink = Math.floor(Date.now() / 500) % 2;
+      if (blink === 0) {
+        ctx.beginPath();
+        ctx.arc(rat.x - 4, rat.y - 3, 2, 0, Math.PI * 2);
+        ctx.arc(rat.x + 4, rat.y - 3, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function drawSnake() {
+      for (let i = 0; i < snake.length; i++) {
+        ctx.fillStyle = "green";
+        ctx.beginPath();
+        ctx.arc(snake[i].x, snake[i].y, 10, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (i === 0) {
+          ctx.strokeStyle = "red";
+          ctx.beginPath();
+          ctx.moveTo(snake[i].x, snake[i].y);
+          ctx.lineTo(snake[i].x + 15 * direction.x, snake[i].y + 15 * direction.y);
+          ctx.stroke();
+
+          // Eyes
+          ctx.fillStyle = "white";
+          ctx.beginPath();
+          ctx.arc(snake[i].x - 5, snake[i].y - 5, 2, 0, Math.PI * 2);
+          ctx.arc(snake[i].x + 5, snake[i].y - 5, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    function drawWalls() {
+      ctx.fillStyle = "white";
+      for (let wall of walls) {
+        ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
+      }
+    }
+
+    function update() {
+      if (gameOver) return;
+
+      const head = { x: snake[0].x, y: snake[0].y };
+      const dx = rat.x - head.x;
+      const dy = rat.y - head.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      direction = { x: dx / dist, y: dy / dist };
+
+      const newHead = {
+        x: head.x + direction.x * snakeSpeed,
+        y: head.y + direction.y * snakeSpeed,
+      };
+
+      snake.unshift(newHead);
+      while (snake.length > snakeLength) snake.pop();
+
+      const dRat = Math.hypot(newHead.x - rat.x, newHead.y - rat.y);
+      if (dRat < 15) {
+        endGame();
+      }
+
+      for (let i = 1; i < snake.length; i++) {
+        if (Math.hypot(snake[i].x - rat.x, snake[i].y - rat.y) < 15) {
+          endGame();
+        }
+      }
+
+      const futureX = rat.x + rat.dx;
+      const futureY = rat.y + rat.dy;
+      const collides = walls.some(w =>
+        futureX + rat.size / 2 > w.x &&
+        futureX - rat.size / 2 < w.x + w.w &&
+        futureY + rat.size / 2 > w.y &&
+        futureY - rat.size / 2 < w.y + w.h);
+
+      if (!collides) {
+        rat.x = futureX;
+        rat.y = futureY;
+      }
+    }
+
+    function endGame() {
+      document.getElementById("gameOver").style.display = "block";
+      gameOver = true;
+      if (score > highScore) {
+        highScore = score;
+        localStorage.setItem("highScore", highScore);
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawWalls();
+      drawSnake();
+      drawRat();
+    }
+
+    function gameLoop() {
+      update();
+      draw();
+      document.getElementById("score").textContent = score;
+      document.getElementById("highScore").textContent = highScore;
+      requestAnimationFrame(gameLoop);
+    }
+
+    setInterval(() => {
+      if (!gameOver) {
+        score += 5;
+        snakeLength *= 2; // Snake size doubles every 5 sec
+      }
+    }, 5000);
+
+    setInterval(() => {
+      faceIndex = (faceIndex + 1) % snakeFaces.length;
+      snakeFace = snakeFaces[faceIndex];
+    }, 10000);
+
+    document.addEventListener("keydown", e => {
+      if (gameOver) {
+        location.reload();
+        return;
+      }
+      switch (e.key) {
+        case "ArrowUp": rat.dy = -rat.speed; break;
+        case "ArrowDown": rat.dy = rat.speed; break;
+        case "ArrowLeft": rat.dx = -rat.speed; break;
+        case "ArrowRight": rat.dx = rat.speed; break;
+      }
+    });
+
+    document.addEventListener("keyup", e => {
+      if (["ArrowUp", "ArrowDown"].includes(e.key)) rat.dy = 0;
+      if (["ArrowLeft", "ArrowRight"].includes(e.key)) rat.dx = 0;
+    });
+
+    gameLoop();
+  </script>
+</body>
+</html>
